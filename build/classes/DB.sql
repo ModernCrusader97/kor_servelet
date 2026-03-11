@@ -88,7 +88,7 @@ SELECT A.*, M.name AS e_w
 FROM article AS A
 INNER JOIN `member` AS M
 ON A.memberId = M.id
-WHERE A.id = 5;
+
 
 # article 생성(대량) => 해당 쿼리 실행 시 article 생성
 INSERT INTO article
@@ -134,19 +134,12 @@ SET updateDate = NOW(),
 `body` = 'test3'
 WHERE id = 3;
 
-DESC `member`
-
- SELECT A.*, M.name AS writerName FROM article AS A INNER JOIN `member` AS M ON A.memberId = M.id WHERE A.id = 4;
- DESC article;
-SELECT *
-FROM article;
-
-SELECT *
-FROM `member`;
-INSERT INTO MEMBER
-
 SET regDate = NOW(),
 updateDate = NOW(),
 loginId = 'whdtjr970717',
 loginPw = 'Jo1se1ph1@',
 `name` ='이종석';
+
+SELECT * FROM `article`;
+	
+SELECT * FROM `member`;
