@@ -11,11 +11,9 @@ int cPage = (int) request.getAttribute("page"); // 현재 페이지 번호
 int totalCnt = (int) request.getAttribute("totalCnt"); // 전체 게시글 수
 int totalPage = (int) request.getAttribute("totalPage"); // 계산된 총 페이지 수
 
-Integer loginedMemberId = (Integer) session.getAttribute("loginedMemberId");
-String loginedMemberName = (String) session.getAttribute("loginedMemberName");
 
-boolean isLogined = (loginedMemberId != null);
 %>
+
 
 
 <!DOCTYPE html>
@@ -33,33 +31,12 @@ table>thead>tr>th, table>tbody>tr>td {
 <body>
 	<a href="../home/main">메인으로 이동</a>
 	<h1>게시글 목록</h1>
-		<%
-	if (isLogined) {
-	%>
-	<div>
-		현재
-	<%=loginedMemberName%>(<%=loginedMemberId%>)님 로그인 중
-	</div>
-	<div>
-		<a href="../member/doLogout">로그아웃</a>
-	</div>
-	<%
-	}
-	%>
-	<%
-	if (!isLogined) {
-	%>
+	<%@ include file="../part/top_bar.jspf"%>
 	<div>
 	 
-	</div>
-	<div>
-		<a href="../member/login">로그인</a>
-	</div>
-	<%
-	}
-	%>
 	총 게시글 갯수 :
 	<%=totalCnt%>
+	</div>
 	<% if (isLogined) { %>
     <div style="margin: 10px 0;">
         <a href="write" style="display: inline-block; padding: 5px 10px; background-color: lightgray; text-decoration: none; color: black; border: 1px solid gray; border-radius: 3px;">글쓰기</a>

@@ -42,11 +42,11 @@ public class ArticleListServlet extends HttpServlet {
 			if (request.getParameter("page") != null && request.getParameter("page").length() != 0) {
 				page = Integer.parseInt(request.getParameter("page"));
 			}
-			
+
 			int itemsInAPage = 10;
 			int limitFrom = (page - 1) * itemsInAPage;
 			
-			DBUtil dbUtil = new DBUtil(request, response);
+			
 
 			SecSql sql = SecSql.from("SELECT COUNT(*)");
 			sql.append("FROM article");
@@ -62,7 +62,7 @@ public class ArticleListServlet extends HttpServlet {
 			sql.append("ORDER BY A.id DESC");
 			sql.append("LIMIT ?, ?;", limitFrom, itemsInAPage);
 			
-			List<Map<String, Object>> articleRows = dbUtil.selectRows(conn, sql);
+			List<Map<String, Object>> articleRows = DBUtil.selectRows(conn, sql);
 
 			request.setAttribute("page", page);
 			request.setAttribute("articleRows", articleRows);
