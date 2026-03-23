@@ -22,12 +22,52 @@ public class ArticleController {
 private HttpServletRequest request;
 private HttpServletResponse response;
 private Connection conn;
+private ArticleService articleService;
+
+private boolean isLogined() throws IOException {
+    HttpSession session = request.getSession();
+    if (session.getAttribute("loginedMemberId") == null) {
+        
+        response.getWriter().append("<script>alert('로그인 후 이용해주세요.'); location.replace('../member/login');</script>");
+        return false;
+    }
+    return true;
+}
+
+private int getLoginedMemberId() {
+	return (int) request.getSession().getAttribute("loginedMemberId");
+}
+
+
+private Map<String, Object> getArticleById(int id) throws IOException {
+
+	Map<String, Object> articleRow = articleService.getArticleById(id);
+
+    if (articleRow == null) {        
+        response.getWriter().append("<script>alert('존재하지 않는 게시글입니다.'); history.back();</script>");
+        return null;
+    }
+    return articleRow;
+}
+
+private boolean hasPermission(Map<String, Object> articleRow) throws IOException {
+
+    Integer loginedMemberId = getLoginedMemberId();
+    int articleMemberId = (int) articleRow.get("memberId");
+
+    if (!isLogined() || loginedMemberId != articleMemberId) 
+           return false;
+
+    return true;
+}
 
 public ArticleController(HttpServletRequest request, HttpServletResponse response, Connection conn) {
 	this.request = request;
 	this.response = response;
 	this.conn = conn;
+	this.articleService = new ArticleService(conn);
 }
+
 public void showList() throws ServletException, IOException
 {
 	int page = 1;
@@ -36,26 +76,10 @@ public void showList() throws ServletException, IOException
 	}
 
 	int itemsInAPage = 10;
-	int limitFrom = (page - 1) * itemsInAPage;
-	
-	
-
-	SecSql sql = SecSql.from("SELECT COUNT(*)");
-	sql.append("FROM article");
-	
-	int totalCnt = DBUtil.selectRowIntValue(conn, sql);
+	int totalCnt = articleService.getTotalCnt();
 	int totalPage = (int)Math.ceil(totalCnt / (double) itemsInAPage);
-
-
-	sql = SecSql.from("SELECT A.*, M.name AS writerName");
-	sql.append(" FROM article AS A");
-	sql.append(" INNER JOIN `member` AS M");
-	sql.append(" ON A.memberId = M.id");
-	sql.append("ORDER BY A.id DESC");
-	sql.append("LIMIT ?, ?;", limitFrom, itemsInAPage);
-	
-	List<Map<String, Object>> articleRows = DBUtil.selectRows(conn, sql);
-
+	var articleRows = articleService.getForPrintArticles(page, itemsInAPage);
+    
 	request.setAttribute("page", page);
 	request.setAttribute("articleRows", articleRows);
 	request.setAttribute("totalCnt", totalCnt);
@@ -68,40 +92,29 @@ public void showList() throws ServletException, IOException
 
 public void doDelete() throws ServletException, IOException
 {
-	HttpSession session = request.getSession();
-	Integer loginedMemberId = (Integer) session.getAttribute("loginedMemberId");
-	
-	if (loginedMemberId == null) {
-	    response.getWriter().append("<script>alert('로그인 후 이용해주세요.'); location.replace('../member/login');</script>");
-	    return;
-	}
-	
+
+	if (isLogined() == false)
+		 return;
 
 	
 	int id = Integer.parseInt(request.getParameter("id"));
-	SecSql sql = SecSql.from("SELECT * ");
-	sql.append("FROM article ");
-	sql.append( "WHERE id = ?", id);
-	
-	Map<String, Object> articleRow = DBUtil.selectRow(conn, sql);
-	
-	if (articleRow == null) {
-	    response.getWriter().append("<script>alert('존재하지 않는 게시글입니다.'); history.back();</script>");
-	    return;
-	}
-	
-	int articleMemberId = (int) articleRow.get("memberId");
 
-	if (loginedMemberId != articleMemberId) {
+	Map<String, Object> articleRow = getArticleById(id);
+	
+	if (articleRow == null) 
+		return;
+
+	
+
+	if ( !hasPermission(articleRow)) {
 	    response.getWriter().append("<script>alert('해당 게시글의 삭제 권한이 없습니다.'); history.back();</script>");
 	    return;
 	}
 	
-	 sql = SecSql.from("DELETE");
-	sql.append("FROM article");
-	sql.append("WHERE id = ?", id);
-
-	DBUtil.delete(conn, sql);
+	if( articleService.delete(id) == 0) {
+	    response.getWriter().append("<script>alert('삭제에 실패하였습니다.'); history.back();</script>");
+	    return;
+	}
 	
 	response.getWriter().append(String.format("<script>alert('%d번 글이 삭제 되었습니다'); location.replace('list')</script>", id));
 
@@ -112,45 +125,35 @@ public void showDetail() throws ServletException, IOException
 	String idStr = request.getParameter("id");
 	int id = Integer.parseInt(idStr);
 
-	SecSql sql = SecSql.from("SELECT A.*, M.name AS writerName");
-	sql.append(" FROM article AS A");
-	sql.append(" INNER JOIN `member` AS M");
-	sql.append(" ON A.memberId = M.id");
-	sql.append(" WHERE A.id = ?", id);
+	Map<String, Object> articleRow = articleService.getForPrintArticleById(id);
 	
-	Map<String, Object> articleRow = DBUtil.selectRow(conn, sql);
-
+	if (articleRow == null) {
+        response.getWriter().append(String.format("<script>alert('%d번 게시글은 존재하지 않습니다.'); history.back();</script>", id));
+        return;
+    }
+	
 	request.setAttribute("articleRow", articleRow);
 	request.getRequestDispatcher("/jsp/article/detail.jsp").forward(request, response);
 
 }
+
 public void doModify() throws ServletException, IOException
 {
-	HttpSession session = request.getSession();
-	Integer loginedMemberId = (Integer) session.getAttribute("loginedMemberId");
 	
-	if (loginedMemberId == null) {
-	    response.getWriter().append("<script>alert('로그인 후 이용해주세요.'); location.replace('../member/login');</script>");
-	    return;
-	}
-	
+	if (isLogined() == false) 
+		return;
+
 
 	
 	int id = Integer.parseInt(request.getParameter("id"));
-	SecSql sql = SecSql.from("SELECT * ");
-	sql.append("FROM article ");
-	sql.append( "WHERE id = ?", id);
-	
-	Map<String, Object> articleRow = DBUtil.selectRow(conn, sql);
-	
-	if (articleRow == null) {
-	    response.getWriter().append("<script>alert('존재하지 않는 게시글입니다.'); history.back();</script>");
-	    return;
-	}
-	
-	int articleMemberId = (int) articleRow.get("memberId");
 
-	if (loginedMemberId != articleMemberId) {
+	Map<String, Object> articleRow = getArticleById(id);
+	
+	if (articleRow == null) 
+		return;
+
+
+	if ( !hasPermission(articleRow)) {
 	    response.getWriter().append("<script>alert('해당 게시글의 수정 권한이 없습니다.'); history.back();</script>");
 	    return;
 	}
@@ -158,67 +161,56 @@ public void doModify() throws ServletException, IOException
 	String title = request.getParameter("title");
 	String body = request.getParameter("body");
 
-	sql = SecSql.from("UPDATE article");
-	sql.append("SET updateDate = NOW(),");
-	sql.append("title = ?,", title);
-	sql.append("`body` = ?", body);
-	sql.append("WHERE id = ?", id);
 	
-	 DBUtil.update(conn, sql);
 
+	if (articleService.modify(id, title, body) == 0) {
+	    response.getWriter().append("<script>alert('수정에 실패하였습니다.'); history.back();</script>");
+	    return;
+	}
+	
 	response.getWriter()
 			.append(String.format("<script>alert('%d번 글이 수정 되었습니다'); location.replace('list')</script>", id));
 
 }
+
 public void doWrite() throws ServletException, IOException
 {
-	HttpSession session = request.getSession();
-    int loginedMemberId = (int) session.getAttribute("loginedMemberId");
+
+	
+	if (isLogined() == false) 
+		return;
+
+    int loginedMemberId = getLoginedMemberId();
     
 	String title = request.getParameter("title");
 	String body = request.getParameter("body");
 
-	SecSql sql = SecSql.from("INSERT INTO article");
-	sql.append("SET regDate = NOW(),");
-	sql.append("updateDate = NOW(),");
-	sql.append("memberId = ?,", loginedMemberId);
-	sql.append("title = ?,", title);
-	sql.append("`body` = ?", body);
-
-	int id = DBUtil.insert(conn, sql);
-
+    int id = articleService.write(loginedMemberId, title, body);
+    
 	response.getWriter()
 			.append(String.format("<script>alert('%d번 글이 작성 되었습니다'); location.replace('list')</script>", id));
 
 }
+
 public void showModify() throws ServletException, IOException
 {
-	
-	HttpSession session = request.getSession();
-	Integer loginedMemberId = (Integer) session.getAttribute("loginedMemberId");
-	
-	if (loginedMemberId == null) {
-	    response.getWriter().append("<script>alert('로그인 후 이용해주세요.'); location.replace('../member/login');</script>");
-	    return;
-	}
+
+	if (isLogined() == false)
+		 return;
+
 	
 
 	
 	int id = Integer.parseInt(request.getParameter("id"));
-	SecSql sql = SecSql.from("SELECT * ");
-	sql.append("FROM article ");
-	sql.append( "WHERE id = ?", id);
-	
-	Map<String, Object> articleRow = DBUtil.selectRow(conn, sql);
-	
-	if (articleRow == null) {
-	    response.getWriter().append("<script>alert('존재하지 않는 게시글입니다.'); history.back();</script>");
-	    return;
-	}
-	
-	int articleMemberId = (int) articleRow.get("memberId");
 
-	if (loginedMemberId != articleMemberId) {
+	
+	Map<String, Object> articleRow = getArticleById(id);
+	
+	if (articleRow == null)
+		return;
+		
+
+	if (!hasPermission(articleRow)) {
 	    response.getWriter().append("<script>alert('해당 게시글의 수정 권한이 없습니다.'); history.back();</script>");
 	    return;
 	}
@@ -230,12 +222,8 @@ public void showModify() throws ServletException, IOException
 }
 public void showWrite() throws ServletException, IOException
 {
-	HttpSession session = request.getSession();
-    if (session.getAttribute("loginedMemberId") == null) {
-        response.setContentType("text/html;charset=UTF-8");
-        response.getWriter().append("<script>alert('로그인 후 이용해주세요.'); location.replace('../member/login');</script>");
+    if (!isLogined()) 
         return;
-    }
 	request.getRequestDispatcher("/jsp/article/write.jsp").forward(request, response);
 
 }
